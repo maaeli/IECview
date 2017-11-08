@@ -1,3 +1,13 @@
+
+#Questions: 
+#Y-scaling which can be turned on and off
+# Selct a point (synchronized with frame slider) -> x value
+# Select a region -> x values
+#recommended reading
+#Add plot wihtout updating axis
+
+#boxes: imageview 
+
 from silx.gui import qt
 from silx.gui import plot
 import numpy
@@ -11,6 +21,8 @@ from silx.gui.widgets.WaitingPushButton import WaitingPushButton
 from PyQt4.QtGui import QSlider, QLabel
 from PyQt4.QtCore import Qt
 from PyQt4.QtCore import pyqtSignal
+from PyQt4.QtCore import pyqtSlot
+import random
 
 
 class IECwindow(qt.QMainWindow):
@@ -20,6 +32,7 @@ class IECwindow(qt.QMainWindow):
     runLength = 0
     
     frameSelected = pyqtSignal(int)
+    diffSelected = pyqtSignal(int)
 
     def __init__(self, parent = None):
         qt.QMainWindow.__init__(self)
@@ -32,12 +45,14 @@ class IECwindow(qt.QMainWindow):
         backend = "mpl"
         #self.plot2d = plot.Plot2D(parent=widget, backend=backend)
         #self.plot2d.setInteractiveMode('pan')
-        self.plot1d_chromo = plot.Plot1D(parent=widget, backend=backend)
+        self.plot1d_chromo = self.createChromoPLot(widget,backend)
         self.plot1d_log = plot.Plot1D(parent=widget, backend=backend)
-
+        self.plot1d_subchromo =  self.createChromoPLot(widget,backend)
+        self.plot1d_ratio = self.createChromoPLot(widget,backend)
         self.plot1d_log.getYAxis().setScale("log")
         
-        self.frameSlider = self.createFrameSlider()
+        self.frameSlider = self.createFrameSlider(widget)
+        self.diffSlider = self.createDiffSlider(widget)
         
      
         self.l1 = QLabel( str(self.plot1d_chromo.getXAxis().getLimits()[0]) + "," + str(self.frameSlider.minimum))
@@ -49,16 +64,18 @@ class IECwindow(qt.QMainWindow):
               
         #self.constraint1 = SyncAxes([self.plot2d.getXAxis(), self.plot1d_x1.getXAxis(), self.plot1d_x2.getXAxis()])
         #self.constraint2 = SyncAxes([self.plot2d.getYAxis(), self.plot1d_y1.getYAxis(), self.plot1d_y2.getYAxis()])
-        #self.constraint3 = SyncAxes([self.plot1d_x1.getYAxis(), self.plot1d_y1.getXAxis()])
+        self.constraint3 = SyncAxes([self.plot1d_chromo.getXAxis(), self.plot1d_subchromo.getXAxis(),self.plot1d_ratio.getXAxis()])
+        #self.constraint3 = SyncAxes([self.plot1d_chromo.getXAxis(), self.plot1d_ratio.getXAxis()])
         #self.constraint1 = SyncAxes([self.plot1d_log.getXAxis(), self.plot1d_loglog.getXAxis(),self.plot1d_kratky.getXAxis(),self.plot1d_holtzer.getXAxis()], syncScale=False)
 
         #self.plot1d_kratky.getYAxis().setLimits(0,medfilt(I*self.q*self.q,21).max())
         layout.addWidget(self.plot1d_chromo, 0, 0)
         layout.addWidget(self.plot1d_log, 0, 1)
         
-        layout.addWidget(self.frameSlider)
-        
-      
+        layout.addWidget(self.frameSlider,1,0)
+        layout.addWidget(self.diffSlider,2,0)
+        layout.addWidget(self.plot1d_subchromo, 3, 0)
+        layout.addWidget(self.plot1d_ratio, 3, 1)
         layout.addWidget(self.l1)
     
     def createCenteredLabel(self, text):
@@ -67,29 +84,61 @@ class IECwindow(qt.QMainWindow):
         label.setText(text)
         return label
     
-    def createFrameSlider(self):
-        self.frameslide  = SyncSlide(self.plot1d_chromo.getXAxis(),  Qt.Horizontal)
+    def createChromoPLot(self,widget,backend):
+        chromo = plot.Plot1D(parent=widget, backend=backend)
+        chromo.getXAxis().sigLimitsChanged.connect(self.chromLimitsChanged)
+        return chromo
+    
+    @pyqtSlot(float,float)
+    def chromLimitsChanged(self,minv,maxv):
+        self.frameslide.setMinimum(int(minv))
+        self.frameslide.setMaximum(int(maxv))
+
+    def createFrameSlider(self,widget):
+        #self.frameslide  = SyncSlide(self.plot1d_chromo.getXAxis(), Qt.Horizontal,parent=widget )
+        self.frameslide  = QSlider(Qt.Horizontal,parent=widget )
         self.frameslide.setMinimum(0)
         self.frameslide.setMaximum(3000)
         self.frameslide.setValue(1200)
         self.frameslide.valueChanged.connect(self.frameSelectedDo)
-        self.frameslide.sigLimitsChanged.connect(self.frameRangeChange)
+        #self.frameslide.sigLimitsChanged.connect(self.frameRangeChange)
         return self.frameslide
 
     def frameSelectedDo(self):
         self.frameSelected.emit(self.frameslide.value())
-        
+   
+    def createDiffSlider(self,widget):
+        #self.frameslide  = SyncSlide(self.plot1d_chromo.getXAxis(), Qt.Horizontal,parent=widget )
+        self.diffslide  = QSlider(Qt.Horizontal,parent=widget )
+        self.diffslide.setMinimum(0)
+        self.diffslide.setMaximum(3000)
+        self.diffslide.setValue(0)
+        self.diffslide.valueChanged.connect(self.diffSelectedDo)
+        #self.frameslide.sigLimitsChanged.connect(self.frameRangeChange)
+        return self.diffslide  
+    
+    def diffSelectedDo(self):
+        self.plot1d_subchromo.setGraphTitle("Shift " + str(self.diffslide.value()))
+        self.diffSelected.emit(self.diffslide.value())   
     
     def addOneCurve(self,q,I, handle, frameNr):
         color = self.getColor(handle)
         self.plot1d_log.addCurve(x=q,y=I,  legend = handle, color= color)
         self.plot1d_log.setGraphTitle("Frame number " + str(frameNr))
         
-    def addChromo(self,intensity,handle,cType):
+    def addChromo(self,intensity,handle,cType, yScale = True):
         color = self.getColor(handle)
         runlength = intensity.shape[0]
-        self.plot1d_chromo.addCurve(x=numpy.arange(runlength),y=intensity, legend = handle, color = color)
-      
+        if handle in ("data","buffer"):
+            self.plot1d_chromo.addCurve(x = numpy.arange(runlength),y=intensity, legend = handle+cType, color = color)
+            self.plot1d_chromo.getXAxis().setAutoScale(flag=False)
+        if handle in ("sub", "I0", "Rg"):
+            self.plot1d_subchromo.addCurve(x = numpy.arange(runlength),y=intensity, legend = handle+cType, color = color)   
+            self.plot1d_subchromo.getXAxis().setAutoScale(flag=False)
+        if handle in ("ratio"):
+            self.plot1d_ratio.addCurve(x = numpy.arange(runlength),y=intensity, legend = handle+cType, color = color)        
+            self.plot1d_ratio.getXAxis().setAutoScale(flag=False)
+       
     def getColor(self,handle):
         if "data" in handle:
             return "red"
@@ -97,6 +146,12 @@ class IECwindow(qt.QMainWindow):
             return "black"
         if "sub" in handle:
             return "blue"
+        if "ratio" in handle:
+            return "#%06x" % random.randint(0, 0xFFFFFF)
+        if "I0" in handle:
+            return "red"
+        if "Rg" in handle:
+            return "green"
         
     def frameRangeChange(self):
         self.l1.setText( str(self.plot1d_chromo.getXAxis().getLimits()[0]) + "," + str(self.frameSlider.minimum))
@@ -135,13 +190,13 @@ class SyncSlide(QSlider):
 
         self.start()
         
-    def setMinimum(self, *args, **kwargs):
-        minimum = args[0]
-        return QSlider.setMinimum(self, *args, **kwargs)
-    
-    def setMaximum(self, *args, **kwargs):
-        maximum = args[0]
-        return QSlider.setMaximum(self, *args, **kwargs)
+#     def setMinimum(self, *args, **kwargs):
+#         minimum = args[0]
+#         return super(SyncSlide, self).setMinimum(self, *args, **kwargs)
+#     
+#     def setMaximum(self, *args, **kwargs):
+#         maximum = args[0]
+#         return super(SyncSlide, self).setMaximum(self, *args, **kwargs)
 
 
     def start(self):
