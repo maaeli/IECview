@@ -1,7 +1,7 @@
-from __future__ import print_function, division
-from IECview import IECwindow
+#from __future__ import print_function, division
+from GUI.IECview import IECwindow
 from silx.gui import qt
-from HPLCrun import HPLCrun
+from tools.HPLCrun import HPLCrun
 from PyQt4.QtCore import pyqtSlot
 import numpy
 import sys
@@ -28,7 +28,7 @@ def diffSelectedDo(diff):
     addRawChromo(samplerun.sum_I,numpy.roll(bufferrun.sum_I,diff), handle = "buffer", cType= "sum")
     addRawChromo(samplerun.IinQ(1.0),numpy.roll(bufferrun.IinQ(1.0),diff), handle = "buffer", cType= "1nm")
     window.frameSelected.emit(currentFrame)
-    
+
 @pyqtSlot(str)
 def saveFileDo(fileName):
     samplerun.save(fileName)
@@ -44,22 +44,22 @@ def addRawChromo(sampleI, bufferI, handle, cType):
     window.addChromo(bufferI, handle = "buffer", cType= cType)
 
 
-def main():   
+def main():
     global app
     global window
     global samplerun, bufferrun
     global currentShift, currentFrame
     app = qt.QApplication([])
     samplerun = HPLCrun("BSA_010.h5")
-    bufferrun = HPLCrun("buffer_006.h5")  
-    currentShift = 0  
+    bufferrun = HPLCrun("buffer_006.h5")
+    currentShift = 0
     currentFrame = 1200
     samplerun.subtractBuffer(bufferrun)
     # Create a ThreadSafePlot1D, set its limits and display it
     #plot1d = ThreadSafePlot1D()
     #plot1d.setLimits(0., 1000., 0., 1.)
     #plot1d.show()
-    
+
     window = IECwindow()
     window.frameSelected.connect(frameSelectedDo)
     window.diffSelected.connect(diffSelectedDo)
@@ -78,16 +78,16 @@ def main():
     window.addChromo(samplerun.Rg, handle = "Rg", cType= "Rg")
     #window.addOneCurve(samplerun.q,samplerun.I[1040,:])
     window.setVisible(True)
-    
+
     # Create the thread that calls ThreadSafePlot1D.addCurveThreadSafe
    # updateThread = UpdateThreadSAXS(window)
     #updateThread.start()  # Start updating the plot
 
     app.exec_()
-    
 
-   # updateThread.stop()  # Stop updating the plot    
-    
+
+   # updateThread.stop()  # Stop updating the plot
+
 if __name__ == '__main__':
-    
+
     main()
