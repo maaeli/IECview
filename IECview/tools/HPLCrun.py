@@ -20,6 +20,10 @@ class HPLCrun:
     subI_err = None
 
     def __init__(self, h5file = None):
+        """Initiate hdf5 runs
+        :param h5file: BM29 HPLC hdf5
+                      containing 1 single buffer or samle run, optional
+        """
         if h5file:
             with h5py.File(h5file, "r") as data:
                 self.q = numpy.asarray(data['q'])[:]
